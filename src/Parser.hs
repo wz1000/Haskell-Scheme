@@ -1,17 +1,24 @@
 module Parser ( readExpr
               , parseExpr
+              , readExprList
               ) where
 
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad
-import Control.Monad.Error (throwError)
+import Control.Monad.Except (throwError)
 import Types
 
 readExpr :: String -> ThrowsError LispVal
-readExpr input = case parse parseExpr "lisp" input of
-    Left  err -> throwError $ Parser err
-    Right val -> return val
+readExpr = readOrThrow parseExpr
+
+readExprList :: String -> ThrowsError [LispVal]
+readExprList = readOrThrow (endBy parseExpr spaces)
+
+readOrThrow :: Parser a -> String -> ThrowsError a
+readOrThrow parser input = case parse parser "lisp" input of
+                                Left  err -> throwError $ Parser err
+                                Right val -> return val
 
 parseExpr :: Parser LispVal
 parseExpr = parseString
@@ -35,7 +42,7 @@ spaces = skipMany1 space
 
 escapedChars :: [(String, Char)]
 escapedChars = [("n"   ,'\n')
-               ,("\""  ,'"' )
+               ,("\""  ,'\"')
                ,("t"   ,'\t')
                ,("\\"  ,'\\')]
 
