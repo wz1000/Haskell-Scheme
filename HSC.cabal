@@ -57,7 +57,7 @@ executable HSC
   other-extensions:    ExistentialQuantification
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.7 && <4.8, parsec >=3.1 && <3.2, mtl >=2.2 && <2.3, readline >= 1.0, containers
+  build-depends:       base >=4.7, parsec >=3.1, mtl >=2.2, containers
   
   ghc-options: -fno-warn-deprecated-flags -fno-warn-deprecated-flags
   

@@ -9,12 +9,20 @@ import Eval
 
 primitiveBindings :: IO Env
 primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc PrimitiveFunc) primitives
-                                             ++ map (makeFunc IOFunc       ) ioPrimitives)
+                                             ++ map (makeFunc IOFunc       ) ioPrimitives
+                                             ++ map (makeFunc EnvFunc      ) envPrimitives)
                            where makeFunc constructor (var, func) = (var, constructor func)
 
+envPrimitives :: [(String, Env -> [LispVal] -> IOThrowsError LispVal)]
+envPrimitives = [ ("eval", eval')
+                , ("unquote", eval')
+                , ("apply", applyProc)
+                ]
+                  where eval' env [x]    = eval env x
+                        eval' env (x:xs) = eval env x >> eval' env xs
+
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
-ioPrimitives = [ ("apply"             , applyProc             )
-               , ("open-input-file"   , makePort ReadMode     )
+ioPrimitives = [ ("open-input-file"   , makePort ReadMode     )
                , ("open-output-file"  , makePort WriteMode    )
                , ("open-file"         , makePort ReadWriteMode)
                , ("open-file-append"  , makePort AppendMode   )

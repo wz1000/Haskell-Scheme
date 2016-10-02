@@ -6,7 +6,6 @@ module Eval ( eval
 import Control.Monad
 import Control.Monad.Except
 import Data.Maybe (isNothing)
-import System.IO
 
 import Types
 import Env
@@ -59,8 +58,10 @@ eval env (List [Atom "load", String filename]) =
         load filename >>= liftM last . mapM (eval env)
 eval env (List (function : args))    = do
         func <- eval env function
-        argVals <- mapM (eval env) args
-        apply func argVals
+        if isMacro function
+           then apply env func args
+           else do argVals <- mapM (eval env) args
+                   apply env func argVals
 eval env badForm                     = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
 makeFunc :: Monad m => Maybe String -> Env -> [LispVal] -> [LispVal] -> m LispVal
@@ -72,10 +73,12 @@ makeNormalFunc = makeFunc Nothing
 makeVarArgs :: Monad m => LispVal -> Env -> [LispVal] -> [LispVal] -> m LispVal
 makeVarArgs = makeFunc . Just . showVal
 
-apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
-apply (PrimitiveFunc func) args = liftThrows $ func args
-apply (IOFunc        func) args = func args
-apply (Func params varargs body closure) args = 
+apply :: Env -> LispVal -> [LispVal] -> IOThrowsError LispVal
+apply _   (PrimitiveFunc func) args = liftThrows $ func args
+apply _   (IOFunc        func) args = func args
+apply _   (Macro         func) args = func args
+apply env (EnvFunc       func) args = func env args
+apply _   (Func params varargs body closure) args =
         if num params /= num args && isNothing varargs
            then throwError $ NumArgs (num params) args
            else liftIO (bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
@@ -86,9 +89,9 @@ apply (Func params varargs body closure) args =
                                          Just argName -> liftIO $ bindVars env [(argName, List remainingArgs)]
                                          Nothing      -> return env
 
-applyProc :: [LispVal] -> IOThrowsError LispVal
-applyProc [func, List args] = apply func args
-applyProc (func : args    ) = apply func args
+applyProc :: Env -> [LispVal] -> IOThrowsError LispVal
+applyProc env [func, List args] = apply env func args
+applyProc env (func : args    ) = apply env func args
 
 load :: String -> IOThrowsError [LispVal]
-load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
+load filename = liftIO (readFile filename) >>= liftThrows . readExprList

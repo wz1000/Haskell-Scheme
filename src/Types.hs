@@ -7,29 +7,31 @@ import System.IO
 import Text.ParserCombinators.Parsec (ParseError)
 import qualified Data.Map as M
 
-data LispVal = Atom       String
-             | List       [LispVal]
-             | DottedList [LispVal] LispVal
-             | Number     Integer
-             | Character  Char
-             | String     String
-             | Bool       Bool
-             | IOFunc ([LispVal] -> IOThrowsError LispVal)
-             | Port Handle
+data LispVal = Atom          String
+             | List          [LispVal]
+             | DottedList    [LispVal] LispVal
+             | Number        Integer
+             | Character     Char
+             | String        String
+             | Bool          Bool
+             | Port          Handle
+             | IOFunc        ([LispVal] -> IOThrowsError LispVal)
              | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
+             | EnvFunc       (Env -> [LispVal] -> IOThrowsError LispVal)
+             | Macro         ([LispVal] -> IOThrowsError LispVal)
              | Func { params  :: [String]
                     , varArg  :: Maybe String
                     , body    :: [LispVal]
                     , closure :: Env
                     }
 
-data LispError = NumArgs Integer [LispVal]
-               | TypeMismatch String LispVal
-               | Parser ParseError
+data LispError = NumArgs        Integer      [LispVal]
+               | TypeMismatch   String LispVal
                | BadSpecialForm String LispVal
-               | NotFunction String String
-               | UnboundVar String String
-               | Default String
+               | NotFunction    String String
+               | UnboundVar     String String
+               | Default        String
+               | Parser         ParseError
 
 type ThrowsError = Either LispError
 
@@ -44,6 +46,10 @@ instance Show LispVal where show = showVal
 
 instance Show LispError where show = showError
 
+isMacro :: LispVal -> Bool
+isMacro (Macro _) = True
+isMacro _         = False
+
 showVal :: LispVal -> String
 showVal (String     s     ) = "\"" ++ s ++ "\""
 showVal (Character  ch    ) = "#\\" ++ show ch
@@ -56,6 +62,8 @@ showVal (DottedList h t   ) = "(" ++ unwordsList h ++ " . " ++ showVal t ++ ")"
 showVal (Port       _     ) = "<IO port>"
 showVal (IOFunc     _     ) = "<IO primitive>"
 showVal (PrimitiveFunc _  ) = "<primitive>"
+showVal (EnvFunc    _     ) = "<primitive>"
+showVal (Macro      _     ) = "<macro>"
 showVal (Func args varargs body env) = 
         "(lambda (" ++ unwords (map show args) ++
           (case varargs of
@@ -84,7 +92,7 @@ liftThrows (Left  err) = throwError err
 liftThrows (Right val) = return val
 
 runIOThrows :: IOThrowsError String -> IO String
-runIOThrows action = runExceptT (trapError action) >>= return . extractValue
+runIOThrows action = liftM extractValue $ runExceptT $ trapError action
 
 unwordsList :: [LispVal]  -> String
 unwordsList = unwords . map showVal
